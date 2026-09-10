@@ -1,0 +1,242 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>QuantumChain DEX - NFT Marketplace & Earning Games</title>
+    <link rel="stylesheet" href="styles.css">
+    <link rel="manifest" href="manifest.json">
+    <meta name="theme-color" content="#1a1a2e">
+</head>
+<body>
+    <div id="app" class="app-container">
+        <!-- Navigation -->
+        <nav class="navbar">
+            <div class="nav-brand">⚛️ QuantumChain</div>
+            <div class="nav-menu">
+                <button class="nav-btn active" data-tab="dashboard">Dashboard</button>
+                <button class="nav-btn" data-tab="marketplace">NFT Market</button>
+                <button class="nav-btn" data-tab="games">Games</button>
+                <button class="nav-btn" data-tab="dex">DEX</button>
+                <button class="nav-btn" data-tab="wallet">Wallet</button>
+            </div>
+            <div class="wallet-info">
+                <span id="balance">0 QUANTUM</span>
+                <button id="connectWallet" class="btn-primary">Connect MetaMask</button>
+            </div>
+        </nav>
+
+        <!-- Tabs Content -->
+        <div class="tabs-container">
+            <!-- Dashboard Tab -->
+            <div id="dashboard" class="tab-content active">
+                <div class="container">
+                    <h1>Welcome to QuantumChain DEX</h1>
+                    
+                    <div class="stats-grid">
+                        <div class="stat-card">
+                            <h3>Portfolio Value</h3>
+                            <p id="portfolioValue" class="stat-value">$0.00</p>
+                        </div>
+                        <div class="stat-card">
+                            <h3>Total Earnings</h3>
+                            <p id="totalEarnings" class="stat-value">0 QUANTUM</p>
+                        </div>
+                        <div class="stat-card">
+                            <h3>NFTs Owned</h3>
+                            <p id="nftsOwned" class="stat-value">0</p>
+                        </div>
+                        <div class="stat-card">
+                            <h3>Games Played</h3>
+                            <p id="gamesPlayed" class="stat-value">0</p>
+                        </div>
+                    </div>
+
+                    <div class="quick-actions">
+                        <button class="btn-action" onclick="switchTab('marketplace')">🖼️ Buy NFTs</button>
+                        <button class="btn-action" onclick="switchTab('games')">🎮 Play Games</button>
+                        <button class="btn-action" onclick="switchTab('dex')">💱 Swap Tokens</button>
+                        <button class="btn-action" onclick="switchTab('wallet')">👛 My Wallet</button>
+                    </div>
+
+                    <div class="recent-activity">
+                        <h2>Recent Activity</h2>
+                        <div id="activityList" class="activity-list"></div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- NFT Marketplace Tab -->
+            <div id="marketplace" class="tab-content">
+                <div class="container">
+                    <h1>NFT Marketplace</h1>
+                    
+                    <div class="marketplace-controls">
+                        <input type="text" id="nftSearch" placeholder="Search NFTs..." class="search-input">
+                        <select id="nftFilter" class="filter-select">
+                            <option value="">All Collections</option>
+                            <option value="art">Digital Art</option>
+                            <option value="gaming">Gaming</option>
+                            <option value="music">Music</option>
+                        </select>
+                        <button class="btn-primary" onclick="showMintNFTModal()">+ Mint NFT</button>
+                    </div>
+
+                    <div id="nftGrid" class="nft-grid"></div>
+                </div>
+            </div>
+
+            <!-- Games Tab -->
+            <div id="games" class="tab-content">
+                <div class="container">
+                    <h1>🎮 Earning Games</h1>
+                    
+                    <div class="games-grid">
+                        <div class="game-card" onclick="startGame('clicker')">
+                            <h3>🖱️ Click Game</h3>
+                            <p>Earn 0.1 QUANTUM per click</p>
+                            <button class="btn-primary">Play</button>
+                        </div>
+                        <div class="game-card" onclick="startGame('dice')">
+                            <h3>🎲 Dice Roll</h3>
+                            <p>Win up to 100 QUANTUM</p>
+                            <button class="btn-primary">Play</button>
+                        </div>
+                        <div class="game-card" onclick="startGame('battle')">
+                            <h3>⚔️ Battle Arena</h3>
+                            <p>Fight & earn 50-500 QUANTUM</p>
+                            <button class="btn-primary">Play</button>
+                        </div>
+                        <div class="game-card" onclick="startGame('puzzle')">
+                            <h3>🧩 Puzzle Quest</h3>
+                            <p>Solve puzzles, earn rewards</p>
+                            <button class="btn-primary">Play</button>
+                        </div>
+                    </div>
+
+                    <div id="gameContainer" class="game-container"></div>
+                    <div id="leaderboard" class="leaderboard"></div>
+                </div>
+            </div>
+
+            <!-- DEX Tab -->
+            <div id="dex" class="tab-content">
+                <div class="container">
+                    <h1>💱 DEX Exchange</h1>
+                    
+                    <div class="dex-container">
+                        <div class="swap-card">
+                            <h2>Token Swap</h2>
+                            <div class="swap-form">
+                                <div class="form-group">
+                                    <label>From Token</label>
+                                    <select id="tokenFrom" class="input-field">
+                                        <option value="QUANTUM">QUANTUM</option>
+                                        <option value="USDT">USDT</option>
+                                        <option value="ETH">ETH</option>
+                                    </select>
+                                </div>
+                                <input type="number" id="amountFrom" placeholder="Amount" class="input-field">
+                                
+                                <button class="btn-switch">⇅ Switch</button>
+                                
+                                <div class="form-group">
+                                    <label>To Token</label>
+                                    <select id="tokenTo" class="input-field">
+                                        <option value="USDT">USDT</option>
+                                        <option value="QUANTUM">QUANTUM</option>
+                                        <option value="ETH">ETH</option>
+                                    </select>
+                                </div>
+                                <input type="number" id="amountTo" placeholder="Amount" class="input-field" readonly>
+                                
+                                <button class="btn-primary" onclick="executeSwap()">Swap</button>
+                            </div>
+                        </div>
+
+                        <div class="liquidity-card">
+                            <h2>Liquidity Pools</h2>
+                            <div id="poolsList" class="pools-list"></div>
+                            <button class="btn-primary" onclick="showAddLiquidityModal()">+ Add Liquidity</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Wallet Tab -->
+            <div id="wallet" class="tab-content">
+                <div class="container">
+                    <h1>👛 My Wallet</h1>
+                    
+                    <div class="wallet-section">
+                        <div class="wallet-card">
+                            <h2>Wallet Address</h2>
+                            <p id="walletAddress" class="wallet-address">Not connected</p>
+                            <button class="btn-secondary" onclick="copyToClipboard()">Copy Address</button>
+                        </div>
+
+                        <div class="wallet-card">
+                            <h2>Your Tokens</h2>
+                            <div id="tokensList" class="tokens-list"></div>
+                        </div>
+
+                        <div class="wallet-card">
+                            <h2>Your NFTs</h2>
+                            <div id="myNFTsList" class="nfts-list"></div>
+                        </div>
+
+                        <div class="wallet-card">
+                            <h2>Transactions</h2>
+                            <div id="transactionsList" class="transactions-list"></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modals -->
+    <div id="mintNFTModal" class="modal">
+        <div class="modal-content">
+            <span class="close" onclick="closeMintNFTModal()">&times;</span>
+            <h2>Mint New NFT</h2>
+            <div class="form-group">
+                <label>NFT Name</label>
+                <input type="text" id="nftName" class="input-field" placeholder="Enter NFT name">
+            </div>
+            <div class="form-group">
+                <label>Description</label>
+                <textarea id="nftDescription" class="input-field" placeholder="Describe your NFT"></textarea>
+            </div>
+            <div class="form-group">
+                <label>Price (QUANTUM)</label>
+                <input type="number" id="nftPrice" class="input-field" placeholder="Enter price">
+            </div>
+            <div class="form-group">
+                <label>Image URL</label>
+                <input type="text" id="nftImage" class="input-field" placeholder="https://...">
+            </div>
+            <button class="btn-primary" onclick="mintNFT()">Mint NFT</button>
+        </div>
+    </div>
+
+    <div id="gameModal" class="modal">
+        <div class="modal-content">
+            <span class="close" onclick="closeGameModal()">&times;</span>
+            <div id="gameContent"></div>
+        </div>
+    </div>
+
+    <!-- Footer -->
+    <footer class="footer">
+        <p>⚛️ QuantumChain DEX © 2024 | Decentralized NFT Marketplace & Earning Platform</p>
+        <p>Powered by Blockchain | MetaMask Integration | Zero Fees</p>
+    </footer>
+
+    <script src="blockchain.js"></script>
+    <script src="nft.js"></script>
+    <script src="game.js"></script>
+    <script src="dex.js"></script>
+    <script src="app.js"></script>
+</body>
+</html>
