@@ -1,191 +1,244 @@
-import crypto from 'crypto';
-import EC from 'elliptic';
+// Blockchain Logic for QuantumChain DEX
 
-const ec = new EC.ec('secp256k1');
+class BlockchainEngine {
+    constructor() {
+        this.blocks = [];
+        this.transactions = [];
+        this.accounts = new Map();
+        this.smartContracts = new Map();
+        this.createGenesisBlock();
+    }
 
-// SHA256 Hash Function
-export function sha256(data) {
-  return crypto.createHash('sha256').update(JSON.stringify(data)).digest('hex');
+    // Create Genesis Block
+    createGenesisBlock() {
+        const genesisBlock = {
+            index: 0,
+            timestamp: new Date().toISOString(),
+            transactions: [],
+            nonce: 0,
+            previousHash: '0',
+            hash: this.calculateHash(0, [], '0', 0)
+        };
+        this.blocks.push(genesisBlock);
+    }
+
+    // Calculate Hash
+    calculateHash(index, transactions, previousHash, nonce) {
+        const data = `${index}${JSON.stringify(transactions)}${previousHash}${nonce}`;
+        let hash = 0;
+        for (let i = 0; i < data.length; i++) {
+            const char = data.charCodeAt(i);
+            hash = ((hash << 5) - hash) + char;
+            hash = hash & hash;
+        }
+        return Math.abs(hash).toString(16);
+    }
+
+    // Add Transaction
+    addTransaction(from, to, amount, type = 'transfer') {
+        const transaction = {
+            id: this.generateTransactionId(),
+            from: from,
+            to: to,
+            amount: amount,
+            type: type,
+            timestamp: new Date().toISOString(),
+            status: 'pending'
+        };
+
+        this.transactions.push(transaction);
+        return transaction;
+    }
+
+    // Generate Transaction ID
+    generateTransactionId() {
+        return 'tx_' + Math.random().toString(36).substr(2, 9);
+    }
+
+    // Mine Block
+    mineBlock(minerAddress) {
+        const previousBlock = this.blocks[this.blocks.length - 1];
+        let nonce = 0;
+        let hash = '';
+
+        // Proof of Work
+        do {
+            nonce++;
+            hash = this.calculateHash(
+                previousBlock.index + 1,
+                this.transactions,
+                previousBlock.hash,
+                nonce
+            );
+        } while (!hash.startsWith('00')); // Simple PoW: hash starts with 00
+
+        // Create new block
+        const newBlock = {
+            index: previousBlock.index + 1,
+            timestamp: new Date().toISOString(),
+            transactions: this.transactions,
+            nonce: nonce,
+            previousHash: previousBlock.hash,
+            hash: hash,
+            minerAddress: minerAddress,
+            reward: 10 // Miner reward in QUANTUM
+        };
+
+        this.blocks.push(newBlock);
+        this.transactions = []; // Reset transactions
+
+        return newBlock;
+    }
+
+    // Get Account Balance
+    getBalance(address) {
+        let balance = 1000; // Starting balance
+
+        this.blocks.forEach(block => {
+            block.transactions.forEach(tx => {
+                if (tx.to === address) balance += tx.amount;
+                if (tx.from === address) balance -= tx.amount;
+            });
+        });
+
+        return balance;
+    }
+
+    // Verify Blockchain
+    isChainValid() {
+        for (let i = 1; i < this.blocks.length; i++) {
+            const currentBlock = this.blocks[i];
+            const previousBlock = this.blocks[i - 1];
+
+            if (currentBlock.previousHash !== previousBlock.hash) {
+                return false;
+            }
+
+            const calculatedHash = this.calculateHash(
+                currentBlock.index,
+                currentBlock.transactions,
+                currentBlock.previousHash,
+                currentBlock.nonce
+            );
+
+            if (currentBlock.hash !== calculatedHash) {
+                return false;
+            }
+        }
+
+        return true;
+    }
+
+    // Get Blockchain Info
+    getBlockchainInfo() {
+        return {
+            totalBlocks: this.blocks.length,
+            totalTransactions: this.blocks.reduce((sum, block) => sum + block.transactions.length, 0),
+            pendingTransactions: this.transactions.length,
+            isValid: this.isChainValid(),
+            difficulty: 2 // Current PoW difficulty
+        };
+    }
+
+    // Get Block by Index
+    getBlock(index) {
+        return this.blocks[index] || null;
+    }
+
+    // Get All Blocks
+    getBlocks() {
+        return this.blocks;
+    }
 }
 
-// Transaction Class
-export class Transaction {
-  constructor(sender, receiver, amount, timestamp = Date.now()) {
-    this.sender = sender;
-    this.receiver = receiver;
-    this.amount = amount;
-    this.timestamp = timestamp;
-    this.hash = this.calculateHash();
-  }
+// Mining Pool
+class MiningPool {
+    constructor(blockchain) {
+        this.blockchain = blockchain;
+        this.miners = new Map();
+        this.poolReward = 10; // QUANTUM per block
+    }
 
-  calculateHash() {
-    return sha256({
-      sender: this.sender,
-      receiver: this.receiver,
-      amount: this.amount,
-      timestamp: this.timestamp
-    });
-  }
+    // Join Pool
+    joinPool(minerAddress) {
+        if (!this.miners.has(minerAddress)) {
+            this.miners.set(minerAddress, {
+                address: minerAddress,
+                shares: 0,
+                rewards: 0,
+                joinedAt: new Date().toISOString()
+            });
+        }
+    }
 
-  signTransaction(privateKey) {
-    const key = ec.keyFromPrivate(privateKey);
-    const signature = key.sign(this.hash);
-    this.signature = signature.toDER('hex');
-  }
+    // Mine Block in Pool
+    mineBlockInPool(minerAddress) {
+        const block = this.blockchain.mineBlock(minerAddress);
+        const miner = this.miners.get(minerAddress);
+        
+        if (miner) {
+            miner.shares += 1;
+            miner.rewards += this.poolReward;
+        }
 
-  isValid() {
-    if (this.sender === 'GENESIS') return true;
-    if (!this.signature) return false;
+        return block;
+    }
 
-    const key = ec.keyFromPublic(this.sender, 'hex');
-    return key.verify(this.hash, this.signature);
-  }
+    // Get Miner Stats
+    getMinerStats(minerAddress) {
+        return this.miners.get(minerAddress) || null;
+    }
 }
 
-// Block Class
-export class Block {
-  constructor(index, transactions, previousHash, timestamp = Date.now()) {
-    this.index = index;
-    this.transactions = transactions;
-    this.previousHash = previousHash;
-    this.timestamp = timestamp;
-    this.nonce = 0;
-    this.hash = this.calculateHash();
-  }
-
-  calculateHash() {
-    return sha256({
-      index: this.index,
-      transactions: this.transactions,
-      previousHash: this.previousHash,
-      timestamp: this.timestamp,
-      nonce: this.nonce
-    });
-  }
-
-  mineBlock(difficulty) {
-    const target = '0'.repeat(difficulty);
-    while (this.hash.substring(0, difficulty) !== target) {
-      this.nonce++;
-      this.hash = this.calculateHash();
+// Smart Contract Executor
+class SmartContractExecutor {
+    constructor() {
+        this.contracts = new Map();
     }
-    console.log(`Block mined: ${this.hash}`);
-  }
+
+    // Deploy Smart Contract
+    deployContract(contractId, code, owner) {
+        const contract = {
+            id: contractId,
+            code: code,
+            owner: owner,
+            deployedAt: new Date().toISOString(),
+            state: {},
+            executions: 0
+        };
+
+        this.contracts.set(contractId, contract);
+        return contract;
+    }
+
+    // Execute Smart Contract
+    executeContract(contractId, functionName, params) {
+        const contract = this.contracts.get(contractId);
+        if (!contract) throw new Error('Contract not found');
+
+        try {
+            // Simple contract execution
+            contract.executions++;
+            return {
+                success: true,
+                result: `Executed ${functionName} on contract ${contractId}`,
+                blockNumber: 0
+            };
+        } catch (error) {
+            return {
+                success: false,
+                error: error.message
+            };
+        }
+    }
 }
 
-// Blockchain Class
-export class Blockchain {
-  constructor(difficulty = 4) {
-    this.chain = [];
-    this.pendingTransactions = [];
-    this.difficulty = difficulty;
-    this.miningReward = 10;
-    this.balances = {};
+// Initialize Blockchain
+const blockchain = new BlockchainEngine();
+const miningPool = new MiningPool(blockchain);
+const contractExecutor = new SmartContractExecutor();
 
-    // Genesis Block
-    const genesisBlock = new Block(0, [], '0');
-    genesisBlock.mineBlock(this.difficulty);
-    this.chain.push(genesisBlock);
-
-    // Initial balances
-    this.balances['GENESIS'] = 1000000;
-  }
-
-  getLatestBlock() {
-    return this.chain[this.chain.length - 1];
-  }
-
-  addTransaction(transaction) {
-    if (!transaction.isValid()) {
-      return false;
-    }
-
-    const balance = this.balances[transaction.sender] || 0;
-    if (balance < transaction.amount) {
-      return false;
-    }
-
-    this.pendingTransactions.push(transaction);
-    return true;
-  }
-
-  minePendingTransactions(minerAddress) {
-    const transactions = [...this.pendingTransactions];
-    
-    // Add mining reward transaction
-    const rewardTx = new Transaction('GENESIS', minerAddress, this.miningReward);
-    transactions.push(rewardTx);
-
-    const newBlock = new Block(
-      this.chain.length,
-      transactions,
-      this.getLatestBlock().hash
-    );
-
-    newBlock.mineBlock(this.difficulty);
-    this.chain.push(newBlock);
-
-    // Update balances
-    for (let tx of this.pendingTransactions) {
-      this.balances[tx.sender] = (this.balances[tx.sender] || 0) - tx.amount;
-      this.balances[tx.receiver] = (this.balances[tx.receiver] || 0) + tx.amount;
-    }
-
-    // Miner reward
-    this.balances[minerAddress] = (this.balances[minerAddress] || 0) + this.miningReward;
-
-    this.pendingTransactions = [];
-    return newBlock;
-  }
-
-  getBalance(address) {
-    return this.balances[address] || 0;
-  }
-
-  isChainValid() {
-    for (let i = 1; i < this.chain.length; i++) {
-      const currentBlock = this.chain[i];
-      const previousBlock = this.chain[i - 1];
-
-      if (currentBlock.hash !== currentBlock.calculateHash()) {
-        return false;
-      }
-
-      if (currentBlock.previousHash !== previousBlock.hash) {
-        return false;
-      }
-    }
-    return true;
-  }
-
-  getAllBlocks() {
-    return this.chain;
-  }
-
-  getPendingTransactions() {
-    return this.pendingTransactions;
-  }
-}
-
-// Wallet Class
-export class Wallet {
-  constructor() {
-    const key = ec.genKeyPair();
-    this.privateKey = key.getPrivate('hex');
-    this.publicKey = key.getPublic('hex');
-  }
-
-  getPublicKey() {
-    return this.publicKey;
-  }
-
-  getPrivateKey() {
-    return this.privateKey;
-  }
-
-  sendTransaction(blockchain, receiver, amount) {
-    const transaction = new Transaction(this.publicKey, receiver, amount);
-    transaction.signTransaction(this.privateKey);
-    return blockchain.addTransaction(transaction);
-  }
+// Export for use
+if (typeof module !== 'undefined' && module.exports) {
+    module.exports = { BlockchainEngine, MiningPool, SmartContractExecutor };
 }

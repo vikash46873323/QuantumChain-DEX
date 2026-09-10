@@ -1,191 +1,140 @@
-// DEX Exchange with Liquidity Pools
-export class LiquidityPool {
-  constructor(token1, token2, reserve1 = 1000, reserve2 = 1000) {
-    this.token1 = token1;
-    this.token2 = token2;
-    this.reserve1 = reserve1;
-    this.reserve2 = reserve2;
-    this.totalShares = Math.sqrt(reserve1 * reserve2);
-    this.shares = {};
-  }
+// DEX (Decentralized Exchange) Logic
 
-  // Constant Product Formula: x * y = k
-  getPrice(tokenIn, amountIn) {
-    if (tokenIn === this.token1) {
-      const amountOut = (this.reserve2 * amountIn) / (this.reserve1 + amountIn);
-      return Math.floor(amountOut);
-    } else {
-      const amountOut = (this.reserve1 * amountIn) / (this.reserve2 + amountIn);
-      return Math.floor(amountOut);
-    }
-  }
-
-  // Swap tokens
-  swap(tokenIn, amountIn, minAmountOut) {
-    const amountOut = this.getPrice(tokenIn, amountIn);
-
-    if (amountOut < minAmountOut) {
-      throw new Error('Slippage exceeded');
+class DEXEngine {
+    constructor() {
+        this.liquidityPools = new Map();
+        this.tokens = new Map();
+        this.trades = [];
+        this.initializeDefaultPools();
     }
 
-    if (tokenIn === this.token1) {
-      this.reserve1 += amountIn;
-      this.reserve2 -= amountOut;
-    } else {
-      this.reserve2 += amountIn;
-      this.reserve1 -= amountOut;
+    // Initialize Default Liquidity Pools
+    initializeDefaultPools() {
+        this.createPool('QUANTUM', 'USDT', 10000, 52000);
+        this.createPool('QUANTUM', 'ETH', 5000, 10.5);
+        this.createPool('USDT', 'ETH', 50000, 10.5);
     }
 
-    return amountOut;
-  }
+    // Create Liquidity Pool
+    createPool(token1, token2, reserve1, reserve2) {
+        const pairId = this.getPairId(token1, token2);
+        
+        const pool = {
+            pairId: pairId,
+            token1: token1,
+            token2: token2,
+            reserve1: reserve1,
+            reserve2: reserve2,
+            totalLiquidity: Math.sqrt(reserve1 * reserve2),
+            fee: 0.3,
+            createdAt: new Date().toISOString(),
+            volume24h: 0,
+            apy: this.calculateAPY(reserve1, reserve2)
+        };
 
-  // Add liquidity
-  addLiquidity(provider, amount1, amount2) {
-    const shares = Math.sqrt(amount1 * amount2);
-    this.shares[provider] = (this.shares[provider] || 0) + shares;
-    this.totalShares += shares;
-    this.reserve1 += amount1;
-    this.reserve2 += amount2;
-    return shares;
-  }
-
-  // Remove liquidity
-  removeLiquidity(provider, shareAmount) {
-    if ((this.shares[provider] || 0) < shareAmount) {
-      throw new Error('Insufficient shares');
+        this.liquidityPools.set(pairId, pool);
+        console.log(`Pool created: ${token1}-${token2}`);
+        return pool;
     }
 
-    const share = shareAmount / this.totalShares;
-    const amount1 = Math.floor(this.reserve1 * share);
-    const amount2 = Math.floor(this.reserve2 * share);
+    // Get Pair ID
+    getPairId(token1, token2) {
+        const tokens = [token1, token2].sort();
+        return `${tokens[0]}-${tokens[1]}`;
+    }
 
-    this.shares[provider] -= shareAmount;
-    this.totalShares -= shareAmount;
-    this.reserve1 -= amount1;
-    this.reserve2 -= amount2;
+    // Get Pool
+    getPool(token1, token2) {
+        const pairId = this.getPairId(token1, token2);
+        return this.liquidityPools.get(pairId);
+    }
 
-    return { amount1, amount2 };
-  }
+    // Get All Pools
+    getAllPools() {
+        return Array.from(this.liquidityPools.values());
+    }
 
-  getPoolInfo() {
-    return {
-      token1: this.token1,
-      token2: this.token2,
-      reserve1: this.reserve1,
-      reserve2: this.reserve2,
-      totalShares: this.totalShares,
-      price: this.reserve2 / this.reserve1
-    };
-  }
+    // Swap Tokens (AMM - Automated Market Maker)
+    swap(inputToken, outputToken, inputAmount, userAddress) {
+        const pool = this.getPool(inputToken, outputToken);
+        if (!pool) throw new Error('Pool does not exist');
+
+        const isToken1Input = inputToken === pool.token1;
+        const reserve1 = pool.reserve1;
+        const reserve2 = pool.reserve2;
+
+        const inputWithFee = inputAmount * (1 - pool.fee / 100);
+        const numerator = inputWithFee * (isToken1Input ? reserve2 : reserve1);
+        const denominator = (isToken1Input ? reserve1 : reserve2) + inputWithFee;
+        const outputAmount = numerator / denominator;
+
+        if (isToken1Input) {
+            pool.reserve1 += inputAmount;
+            pool.reserve2 -= outputAmount;
+        } else {
+            pool.reserve1 -= outputAmount;
+            pool.reserve2 += inputAmount;
+        }
+
+        pool.volume24h += inputAmount * this.getTokenPrice(inputToken);
+
+        this.recordTrade(inputToken, outputToken, inputAmount, outputAmount, userAddress);
+
+        return {
+            inputToken: inputToken,
+            outputToken: outputToken,
+            inputAmount: inputAmount,
+            outputAmount: outputAmount,
+            priceImpact: this.calculatePriceImpact(inputAmount, outputAmount),
+            fee: inputAmount * (pool.fee / 100),
+            timestamp: new Date().toISOString()
+        };
+    }
+
+    // Get Token Price
+    getTokenPrice(token, baseToken = 'USDT') {
+        const pool = this.getPool(token, baseToken);
+        if (!pool) return 1;
+
+        const isToken1 = token === pool.token1;
+        return isToken1 ? pool.reserve2 / pool.reserve1 : pool.reserve1 / pool.reserve2;
+    }
+
+    // Calculate Price Impact
+    calculatePriceImpact(inputAmount, outputAmount) {
+        const impact = Math.abs(inputAmount / outputAmount - 0.2) * 100;
+        return Math.max(0.1, impact);
+    }
+
+    // Calculate APY
+    calculateAPY(reserve1, reserve2) {
+        const totalVolume = reserve1 + reserve2;
+        const apy = (totalVolume * 0.003) / (reserve1 + reserve2) * 365 * 100;
+        return Math.min(apy, 100);
+    }
+
+    // Record Trade
+    recordTrade(inputToken, outputToken, inputAmount, outputAmount, userAddress) {
+        this.trades.push({
+            from: inputToken,
+            to: outputToken,
+            inputAmount: inputAmount,
+            outputAmount: outputAmount,
+            user: userAddress,
+            timestamp: new Date().toISOString()
+        });
+    }
+
+    // Get Trade History
+    getTradeHistory(limit = 50) {
+        return this.trades.slice(-limit).reverse();
+    }
 }
 
-// DEX Class
-export class DEX {
-  constructor() {
-    this.pools = {};
-    this.orders = [];
-    this.balances = {};
-  }
+// Initialize DEX Engine
+const dexEngine = new DEXEngine();
 
-  // Create trading pair
-  createPool(token1, token2, reserve1, reserve2) {
-    const pairName = this.getPairName(token1, token2);
-    if (this.pools[pairName]) {
-      throw new Error('Pool already exists');
-    }
-
-    this.pools[pairName] = new LiquidityPool(token1, token2, reserve1, reserve2);
-    return this.pools[pairName];
-  }
-
-  getPairName(token1, token2) {
-    return [token1, token2].sort().join('-');
-  }
-
-  // Get price quote
-  getPrice(tokenIn, tokenOut, amountIn) {
-    const pairName = this.getPairName(tokenIn, tokenOut);
-    const pool = this.pools[pairName];
-
-    if (!pool) {
-      throw new Error('Pool does not exist');
-    }
-
-    if (pool.token1 === tokenIn) {
-      return pool.getPrice(tokenIn, amountIn);
-    } else {
-      return pool.getPrice(tokenOut === pool.token1 ? pool.token2 : pool.token1, amountIn);
-    }
-  }
-
-  // Execute swap
-  swap(user, tokenIn, tokenOut, amountIn, minAmountOut) {
-    const pairName = this.getPairName(tokenIn, tokenOut);
-    const pool = this.pools[pairName];
-
-    if (!pool) {
-      throw new Error('Pool does not exist');
-    }
-
-    if ((this.balances[user] && this.balances[user][tokenIn]) < amountIn) {
-      throw new Error('Insufficient balance');
-    }
-
-    const amountOut = pool.swap(tokenIn, amountIn, minAmountOut);
-
-    // Update balances
-    this.balances[user] = this.balances[user] || {};
-    this.balances[user][tokenIn] = (this.balances[user][tokenIn] || 0) - amountIn;
-    this.balances[user][tokenOut] = (this.balances[user][tokenOut] || 0) + amountOut;
-
-    return amountOut;
-  }
-
-  // Add liquidity to pool
-  addLiquidity(provider, token1, token2, amount1, amount2) {
-    const pairName = this.getPairName(token1, token2);
-    const pool = this.pools[pairName];
-
-    if (!pool) {
-      throw new Error('Pool does not exist');
-    }
-
-    const shares = pool.addLiquidity(provider, amount1, amount2);
-
-    this.balances[provider] = this.balances[provider] || {};
-    this.balances[provider][token1] = (this.balances[provider][token1] || 0) - amount1;
-    this.balances[provider][token2] = (this.balances[provider][token2] || 0) - amount2;
-
-    return shares;
-  }
-
-  // Remove liquidity from pool
-  removeLiquidity(provider, token1, token2, shareAmount) {
-    const pairName = this.getPairName(token1, token2);
-    const pool = this.pools[pairName];
-
-    if (!pool) {
-      throw new Error('Pool does not exist');
-    }
-
-    const { amount1, amount2 } = pool.removeLiquidity(provider, shareAmount);
-
-    this.balances[provider] = this.balances[provider] || {};
-    this.balances[provider][token1] = (this.balances[provider][token1] || 0) + amount1;
-    this.balances[provider][token2] = (this.balances[provider][token2] || 0) + amount2;
-
-    return { amount1, amount2 };
-  }
-
-  getBalance(user, token) {
-    return (this.balances[user] && this.balances[user][token]) || 0;
-  }
-
-  getAllPools() {
-    const poolsInfo = {};
-    for (let [pairName, pool] of Object.entries(this.pools)) {
-      poolsInfo[pairName] = pool.getPoolInfo();
-    }
-    return poolsInfo;
-  }
+// Export for use
+if (typeof module !== 'undefined' && module.exports) {
+    module.exports = DEXEngine;
 }
