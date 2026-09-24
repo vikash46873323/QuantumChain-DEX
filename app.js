@@ -1,4 +1,11 @@
-// Global State
+//class BlockchainEngine {
+ constructor(){this.blocks=[];this.transactions=[];this.blocks.push({index:0,hash:'0',previousHash:'0',transactions:[],nonce:0})}
+ calculateHash(i,t,p,n){let d=`${i}${JSON.stringify(t)}${p}${n}`,h=0;for(let j=0;j<d.length;j++)h=((h<<5)-h)+d.charCodeAt(j);return Math.abs(h).toString(16);}
+ addTransaction(f,t,a){this.transactions.push({from:f,to:t,amount:a})}
+ mineBlock(m){let prev=this.blocks[this.blocks.length-1],nonce=0,hash='';do{nonce++;hash=this.calculateHash(prev.index+1,this.transactions,prev.hash,nonce);}while(!hash.startsWith('00'));this.blocks.push({index:prev.index+1,hash,previousHash:prev.hash,transactions:this.transactions,nonce});this.transactions=[];}
+ getBalance(a){let b=1000;this.blocks.forEach(bl=>bl.transactions.forEach(tx=>{if(tx.to===a)b+=tx.amount;if(tx.from===a)b-=tx.amount;}));return b;}
+}
+const blockchain = new BlockchainEngine(); Global State
 let userWallet = null;
 let userBalance = 0;
 let userNFTs = [];
