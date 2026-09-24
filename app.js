@@ -1,4 +1,4 @@
-//class BlockchainEngine {
+class BlockchainEngine 
  constructor(){this.blocks=[];this.transactions=[];this.blocks.push({index:0,hash:'0',previousHash:'0',transactions:[],nonce:0})}
  calculateHash(i,t,p,n){let d=`${i}${JSON.stringify(t)}${p}${n}`,h=0;for(let j=0;j<d.length;j++)h=((h<<5)-h)+d.charCodeAt(j);return Math.abs(h).toString(16);}
  addTransaction(f,t,a){this.transactions.push({from:f,to:t,amount:a})}
